@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>엑셀 자동 재정렬 툴</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<style>
+  :root{
+    --bg:#f4f6f8; --card:#ffffff; --border:#e2e6ea; --text:#1f2937; --muted:#6b7280;
+    --accent:#2563eb; --accent-dark:#1d4ed8; --green:#16a34a; --red:#dc2626; --amber:#d97706;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:'Malgun Gothic','맑은 고딕',-apple-system,sans-serif;
+    background:var(--bg); color:var(--text); padding:32px 16px;
+  }
+  .wrap{max-width:980px; margin:0 auto;}
+  h1{font-size:22px; margin:0 0 4px;}
+  .sub{color:var(--muted); font-size:13px; margin:0 0 24px;}
+  .card{
+    background:var(--card); border:1px solid var(--border); border-radius:12px;
+    padding:22px; margin-bottom:16px; box-shadow:0 1px 2px rgba(0,0,0,.03);
+    transition:opacity .15s;
+  }
+  .card.disabled{opacity:.45; pointer-events:none;}
+  .step-head{display:flex; align-items:center; gap:10px; margin-bottom:14px;}
+  .step-num{
+    width:24px; height:24px; border-radius:50%; background:var(--accent); color:#fff;
+    font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .step-title{font-size:15px; font-weight:700;}
+  .step-desc{font-size:12.5px; color:var(--muted); margin:2px 0 0 34px;}
+  #dropZoneTemplate,#dropZoneSource{
+    border:2px dashed #c7d0da; border-radius:12px; padding:34px 20px; text-align:center;
+    cursor:pointer; transition:.15s; background:#fafbfc; margin-top:6px;
+  }
+  #dropZoneTemplate.drag,#dropZoneSource.drag{border-color:var(--accent); background:#eef4ff;}
+  .dz-icon{font-size:30px; margin-bottom:8px;}
+  .dz-msg{font-size:15px; font-weight:600;}
+  .dz-hint{font-size:12px; color:var(--muted); margin-top:6px;}
+  input[type=file]{display:none;}
+  .btn{
+    appearance:none; border:none; border-radius:8px; padding:9px 16px; font-size:13.5px;
+    font-weight:600; cursor:pointer; transition:.15s;
+  }
+  .btn-primary{background:var(--accent); color:#fff;}
+  .btn-primary:hover{background:var(--accent-dark);}
+  .btn-primary:disabled{background:#a9b6c9; cursor:not-allowed;}
+  .btn-ghost{background:#fff; color:var(--text); border:1px solid var(--border);}
+  .btn-ghost:hover{background:#f3f4f6;}
+  .btn-sm{padding:5px 10px; font-size:12px;}
+  .btn-danger{background:#fff; color:var(--red); border:1px solid #fbcaca;}
+  .btn-danger:hover{background:#fef2f2;}
+  .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+  .hidden{display:none !important;}
+  select,input[type=text],input[type=number]{
+    padding:7px 9px; border-radius:7px; border:1px solid var(--border); font-size:13px; font-family:inherit;
+  }
+  .meta-row{display:flex; gap:14px; align-items:center; flex-wrap:wrap; margin-top:10px; font-size:12.5px;}
+  .meta-row label{color:var(--muted);}
+  .filename{font-size:12.5px; color:var(--muted); word-break:break-all;}
+  .chips{display:flex; flex-wrap:wrap; gap:6px; margin-top:10px;}
+  .chip{
+    background:#eef2ff; color:#3730a3; font-size:12px; padding:4px 10px; border-radius:999px;
+    border:1px solid #e0e7ff;
+  }
+  .chip.empty{background:#f3f4f6; color:var(--muted); border-color:var(--border);}
+  .rule-row{
+    display:grid; grid-template-columns:1fr 1.4fr 110px 32px; gap:8px; align-items:center; margin-bottom:8px;
+  }
+  .rule-row select, .rule-row input{width:100%;}
+  .map-table{width:100%; border-collapse:collapse; font-size:13px; margin-top:6px;}
+  .map-table th,.map-table td{border:1px solid var(--border); padding:7px 9px; text-align:left;}
+  .map-table th{background:#f1f5f9; font-weight:600; font-size:12px;}
+  .map-table select{width:100%;}
+  .stats-flow{display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin:14px 0;}
+  .stat-pill{background:#f8fafc; border:1px solid var(--border); border-radius:10px; padding:10px 14px; text-align:center;}
+  .stat-pill .n{font-size:17px; font-weight:700;}
+  .stat-pill .l{font-size:11px; color:var(--muted); margin-top:2px; max-width:160px;}
+  .stat-arrow{color:var(--muted); font-size:16px;}
+  .stat-pill.final .n{color:var(--green);}
+  table.preview{width:100%; border-collapse:collapse; font-size:12.5px; margin-top:8px;}
+  table.preview th,table.preview td{border:1px solid var(--border); padding:6px 8px; text-align:left; white-space:nowrap;}
+  table.preview th{background:#f1f5f9; font-weight:600; position:sticky; top:0;}
+  .tbl-scroll{max-height:320px; overflow:auto; border:1px solid var(--border); border-radius:8px;}
+  .note{font-size:12px; color:var(--muted); margin-top:6px;}
+  .errbox{border:1px solid #fca5a5; background:#fef2f2; color:#991b1b; border-radius:10px; padding:14px; font-size:13px; line-height:1.7; margin-top:10px;}
+  .errbox b{display:block; margin-bottom:4px;}
+  .infobox{border:1px solid #bfdbfe; background:#eff6ff; color:#1e40af; border-radius:10px; padding:12px 14px; font-size:12.5px; line-height:1.6; margin-top:10px;}
+  .top-reset{text-align:right; margin-bottom:10px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>엑셀 자동 재정렬 툴</h1>
+  <p class="sub">① 출력 폼 첨부 → ② 재구성 대상 엑셀 첨부 → ③ 필터 조건 설정(유지/제거) → ④ 컬럼 매핑 → ⑤ 실행 및 다운로드. 모든 처리는 브라우저 안에서만 이루어지며 파일은 외부로 전송되지 않습니다.</p>
+
+  <div class="top-reset">
+    <button class="btn btn-ghost btn-sm" id="globalResetBtn">전체 초기화</button>
+  </div>
+
+  <!-- STEP 1: 출력 폼 첨부 -->
+  <div class="card" id="templateCard">
+    <div class="step-head"><div class="step-num">1</div><div class="step-title">출력 폼 첨부</div></div>
+    <div class="step-desc">최종 결과물의 컬럼 구성으로 사용할 엑셀 양식을 첨부하세요. 이 파일의 최상단 헤더 행이 결과 컬럼이 됩니다.</div>
+
+    <div id="dropZoneTemplate">
+      <div class="dz-icon">📄</div>
+      <div class="dz-msg">출력 폼 엑셀파일을 첨부해주세요</div>
+      <div class="dz-hint">클릭하여 선택하거나, 파일을 이곳에 끌어다 놓으세요 (.xlsx만 지원 — 서식 보존을 위해 .xls는 .xlsx로 변환 후 첨부해주세요)</div>
+    </div>
+    <input type="file" id="templateFileInput" accept=".xlsx,.xlsm">
+
+    <div class="meta-row hidden" id="templateMetaRow">
+      <span class="filename" id="templateFileName"></span>
+      <label>시트: <select id="templateSheetSelect"></select></label>
+      <label>헤더 행 번호: <input type="number" id="templateHeaderRowInput" min="1" value="1" style="width:60px;"></label>
+      <button class="btn btn-ghost btn-sm" id="templateResetBtn">다시 첨부</button>
+    </div>
+
+    <div id="templateColumnsBox" class="hidden">
+      <p class="note">감지된 출력 컬럼 (총 <span id="templateColCount">0</span>개)</p>
+      <div class="chips" id="templateChips"></div>
+    </div>
+    <div class="errbox hidden" id="templateError"></div>
+  </div>
+
+  <!-- STEP 2: 재구성 대상 엑셀 첨부 -->
+  <div class="card disabled" id="sourceCard">
+    <div class="step-head"><div class="step-num">2</div><div class="step-title">재구성 대상 엑셀 첨부</div></div>
+    <div class="step-desc">재정렬할 원본 데이터 파일을 첨부하세요. 최상단 헤더 행의 컬럼들을 불러와 필터/매핑에 사용합니다.</div>
+
+    <div id="dropZoneSource">
+      <div class="dz-icon">📎</div>
+      <div class="dz-msg">재구성 대상 엑셀파일을 첨부해주세요</div>
+      <div class="dz-hint">클릭하여 선택하거나, 파일을 이곳에 끌어다 놓으세요 (.xlsx만 지원)</div>
+    </div>
+    <input type="file" id="sourceFileInput" accept=".xlsx,.xlsm">
+
+    <div class="meta-row hidden" id="sourceMetaRow">
+      <span class="filename" id="sourceFileName"></span>
+      <label>시트: <select id="sourceSheetSelect"></select></label>
+      <label>헤더 행 번호: <input type="number" id="sourceHeaderRowInput" min="1" value="1" style="width:60px;"></label>
+      <button class="btn btn-ghost btn-sm" id="sourceResetBtn">다시 첨부</button>
+    </div>
+
+    <div id="sourceColumnsBox" class="hidden">
+      <p class="note">감지된 원본 컬럼 (총 <span id="sourceColCount">0</span>개) · 데이터 <span id="sourceRowCount">0</span>행</p>
+      <div class="chips" id="sourceChips"></div>
+    </div>
+    <div class="errbox hidden" id="sourceError"></div>
+  </div>
+
+  <!-- STEP 3: 필터 조건 -->
+  <div class="card disabled" id="rulesCard">
+    <div class="step-head"><div class="step-num">3</div><div class="step-title">필터 조건 설정</div></div>
+    <div class="step-desc">원본 컬럼을 선택하고, 그 컬럼에 있는 내용(값)을 입력해 해당 행을 <b>유지</b>할지 <b>제거</b>할지 정하세요. 값은 쉼표로 여러 개 입력할 수 있습니다(OR 조건). 조건은 위에서부터 순서대로 적용됩니다.</div>
+    <div id="rulesList"></div>
+    <button class="btn btn-ghost btn-sm" id="addRuleBtn">+ 조건 추가</button>
+    <div class="infobox">조건을 추가하지 않으면 필터링 없이 전체 행이 사용됩니다.</div>
+  </div>
+
+  <!-- STEP 4: 컬럼 매핑 -->
+  <div class="card disabled" id="mappingCard">
+    <div class="step-head"><div class="step-num">4</div><div class="step-title">컬럼 매핑</div></div>
+    <div class="step-desc">출력 폼의 각 컬럼에 채워 넣을 원본 컬럼을 선택하세요. 컬럼명이 일치하면 자동으로 매핑됩니다.</div>
+    <table class="map-table" id="mapTable">
+      <thead><tr><th style="width:40%;">출력 컬럼</th><th>원본 컬럼</th></tr></thead>
+      <tbody id="mapTableBody"></tbody>
+    </table>
+  </div>
+
+  <!-- 설정 저장/불러오기 -->
+  <div class="card disabled" id="configCard">
+    <div class="step-head"><div class="step-title">💾 필터 조건 · 컬럼 매핑 설정 저장/불러오기</div></div>
+    <div class="step-desc">자주 쓰는 조건과 매핑을 이름 붙여 저장해두면, 다음에 새 파일을 첨부했을 때 바로 불러와 적용할 수 있습니다. 브라우저(이 PC)에 저장되며, 파일로 내보내 다른 PC나 동료와 공유할 수도 있습니다.</div>
+
+    <div class="row" style="margin-top:12px;">
+      <input type="text" id="presetNameInput" placeholder="설정 이름 (예: 네이버 완료건)" style="flex:1; min-width:180px;">
+      <button class="btn btn-primary btn-sm" id="savePresetBtn">현재 설정 저장</button>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+      <select id="presetSelect" style="min-width:200px;"><option value="">저장된 설정 선택...</option></select>
+      <button class="btn btn-ghost btn-sm" id="loadPresetBtn">불러오기</button>
+      <button class="btn btn-danger btn-sm" id="deletePresetBtn">삭제</button>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+      <button class="btn btn-ghost btn-sm" id="exportConfigBtn">⬇ 파일로 내보내기 (.json)</button>
+      <button class="btn btn-ghost btn-sm" id="importConfigBtn">⬆ 파일에서 불러오기 (.json)</button>
+      <input type="file" id="importConfigInput" accept=".json" class="hidden">
+    </div>
+    <p class="note" id="presetNote"></p>
+  </div>
+
+  <!-- STEP 5: 실행 -->
+  <div class="card disabled" id="runCard">
+    <div class="step-head"><div class="step-num">5</div><div class="step-title">실행 및 다운로드</div></div>
+    <div class="step-desc">조건과 매핑을 적용해 출력 폼에 데이터를 채웁니다. 출력 폼의 기존 서식은 최대한 유지됩니다.</div>
+    <div class="row">
+      <button class="btn btn-primary" id="runBtn">▶ 실행 (미리보기)</button>
+    </div>
+    <div class="errbox hidden" id="runError"></div>
+
+    <div id="resultBox" class="hidden">
+      <div class="stats-flow" id="statsFlow"></div>
+      <div class="tbl-scroll"><table class="preview" id="previewTable"></table></div>
+      <p class="note" id="previewNote"></p>
+      <div class="row" style="margin-top:16px;">
+        <button class="btn btn-primary" id="downloadBtn">⬇ 결과 엑셀 다운로드</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  // ---------------- 공통 유틸 ----------------
+  function norm(s){ return String(s === undefined || s === null ? '' : s).replace(/\s+/g,'').trim(); }
+  function cellStr(v){ return v === undefined || v === null ? '' : String(v); }
+
+  function extractColumns(headerRowArray){
+    headerRowArray = headerRowArray || [];
+    let lastNonEmpty = -1;
+    headerRowArray.forEach((c,i) => { if (norm(c) !== '') lastNonEmpty = i; });
+    const cols = [];
+    for (let i = 0; i <= lastNonEmpty; i++) {
+      let name = cellStr(headerRowArray[i]).trim();
+      if (!name) name = `(빈컬럼${i+1})`;
+      cols.push({ name, colIndex: i });
+    }
+    return cols;
+  }
+
+  async function readWorkbook(arrayBuffer){
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(arrayBuffer);
+    return wb;
+  }
+
+  function extractCellValue(cell){
+    let v = cell ? cell.value : undefined;
+    if (v === null || v === undefined) return '';
+    if (v instanceof Date) return v;
+    if (typeof v === 'object') {
+      if (Array.isArray(v.richText)) return v.richText.map(t => t.text).join('');
+      if (v.result !== undefined) return v.result; // 수식 결과
+      if (v.text !== undefined) return v.text;     // 하이퍼링크 등
+      if (v.error !== undefined) return '';
+      return '';
+    }
+    return v;
+  }
+
+  function sheetNames(wb){ return wb.worksheets.map(ws => ws.name); }
+
+  function sheetToRows(wb, sheetName){
+    const ws = wb.getWorksheet(sheetName);
+    if (!ws) return [];
+    let maxCol = ws.columnCount || 0;
+    const scanLimit = ws.rowCount || 0;
+    for (let r = 1; r <= scanLimit; r++) maxCol = Math.max(maxCol, ws.getRow(r).cellCount || 0);
+    const rows = [];
+    for (let r = 1; r <= scanLimit; r++) {
+      const row = ws.getRow(r);
+      const arr = [];
+      for (let c = 1; c <= maxCol; c++) arr[c - 1] = extractCellValue(row.getCell(c));
+      rows.push(arr);
+    }
+    return rows;
+  }
+
+  // ---------------- 상태 ----------------
+  const state = {
+    template: { buffer: null, wb: null, sheetName: null, headerRowIdx: 0, columns: [] },
+    source:   { buffer: null, wb: null, sheetName: null, headerRowIdx: 0, columns: [], dataRows: [] },
+    rules: [],
+    ruleSeq: 0,
+    mapping: {}, // { [templateColIndexPosition]: sourceColumnName }
+    mappingTouched: new Set() // idx 목록: 사용자가 직접 선택을 변경한 매핑 (자동매칭으로 덮어쓰지 않음)
+  };
+
+  // ---------------- DOM refs ----------------
+  const el = id => document.getElementById(id);
+  const templateCard = el('templateCard'), sourceCard = el('sourceCard'), rulesCard = el('rulesCard'),
+        mappingCard = el('mappingCard'), configCard = el('configCard'), runCard = el('runCard');
+
+  // ================= STEP 1: 템플릿(출력 폼) =================
+  const dzTemplate = el('dropZoneTemplate'), templateFileInput = el('templateFileInput');
+  dzTemplate.addEventListener('click', () => templateFileInput.click());
+  dzTemplate.addEventListener('dragover', e => { e.preventDefault(); dzTemplate.classList.add('drag'); });
+  dzTemplate.addEventListener('dragleave', () => dzTemplate.classList.remove('drag'));
+  dzTemplate.addEventListener('drop', e => {
+    e.preventDefault(); dzTemplate.classList.remove('drag');
+    if (e.dataTransfer.files[0]) loadTemplateFile(e.dataTransfer.files[0]);
+  });
+  templateFileInput.addEventListener('change', e => { if (e.target.files[0]) loadTemplateFile(e.target.files[0]); });
+  el('templateResetBtn').addEventListener('click', () => resetFrom('template'));
+
+  function loadTemplateFile(file){
+    el('templateError').classList.add('hidden');
+    const reader = new FileReader();
+    reader.onload = async evt => {
+      try {
+        state.template.buffer = evt.target.result;
+        const wb = await readWorkbook(state.template.buffer);
+        state.template.wb = wb;
+        const names = sheetNames(wb);
+        state.template.sheetName = names[0];
+        el('templateFileName').textContent = file.name;
+        el('templateMetaRow').classList.remove('hidden');
+        const sel = el('templateSheetSelect');
+        sel.innerHTML = names.map(n => `<option value="${escapeAttr(n)}">${escapeHtml(n)}</option>`).join('');
+        el('templateHeaderRowInput').value = 1;
+        rebuildTemplateColumns();
+      } catch (err) {
+        showBoxError('templateError', '출력 폼 파일을 읽을 수 없습니다.', ['.xlsx 형식인지 확인해주세요.', String(err.message || err)]);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+  el('templateSheetSelect').addEventListener('change', e => {
+    state.template.sheetName = e.target.value;
+    rebuildTemplateColumns();
+  });
+  el('templateHeaderRowInput').addEventListener('input', () => rebuildTemplateColumns());
+
+  function rebuildTemplateColumns(){
+    const wb = state.template.wb;
+    if (!wb) return;
+    const rows = sheetToRows(wb, state.template.sheetName);
+    const headerRowIdx = Math.max(0, (parseInt(el('templateHeaderRowInput').value, 10) || 1) - 1);
+    state.template.headerRowIdx = headerRowIdx;
+    const cols = extractColumns(rows[headerRowIdx]);
+    state.template.columns = cols;
+
+    const box = el('templateColumnsBox');
+    if (!cols.length) {
+      box.classList.add('hidden');
+      showBoxError('templateError', '헤더 행에서 컬럼을 찾지 못했습니다.', ['헤더 행 번호를 확인해주세요.']);
+      sourceCard.classList.add('disabled');
+      return;
+    }
+    el('templateError').classList.add('hidden');
+    box.classList.remove('hidden');
+    el('templateColCount').textContent = cols.length;
+    el('templateChips').innerHTML = cols.map(c => `<span class="chip">${escapeHtml(c.name)}</span>`).join('');
+
+    sourceCard.classList.remove('disabled');
+    renderMappingUI();
+  }
+
+  // ================= STEP 2: 원본(재구성 대상) =================
+  const dzSource = el('dropZoneSource'), sourceFileInput = el('sourceFileInput');
+  dzSource.addEventListener('click', () => sourceFileInput.click());
+  dzSource.addEventListener('dragover', e => { e.preventDefault(); dzSource.classList.add('drag'); });
+  dzSource.addEventListener('dragleave', () => dzSource.classList.remove('drag'));
+  dzSource.addEventListener('drop', e => {
+    e.preventDefault(); dzSource.classList.remove('drag');
+    if (e.dataTransfer.files[0]) loadSourceFile(e.dataTransfer.files[0]);
+  });
+  sourceFileInput.addEventListener('change', e => { if (e.target.files[0]) loadSourceFile(e.target.files[0]); });
+  el('sourceResetBtn').addEventListener('click', () => resetFrom('source'));
+
+  function loadSourceFile(file){
+    el('sourceError').classList.add('hidden');
+    const reader = new FileReader();
+    reader.onload = async evt => {
+      try {
+        state.source.buffer = evt.target.result;
+        const wb = await readWorkbook(state.source.buffer);
+        state.source.wb = wb;
+        const names = sheetNames(wb);
+        state.source.sheetName = names[0];
+        el('sourceFileName').textContent = file.name;
+        el('sourceMetaRow').classList.remove('hidden');
+        const sel = el('sourceSheetSelect');
+        sel.innerHTML = names.map(n => `<option value="${escapeAttr(n)}">${escapeHtml(n)}</option>`).join('');
+        el('sourceHeaderRowInput').value = 1;
+        rebuildSourceColumns();
+      } catch (err) {
+        showBoxError('sourceError', '재구성 대상 파일을 읽을 수 없습니다.', ['.xlsx 형식인지 확인해주세요.', String(err.message || err)]);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+  el('sourceSheetSelect').addEventListener('change', e => {
+    state.source.sheetName = e.target.value;
+    rebuildSourceColumns();
+  });
+  el('sourceHeaderRowInput').addEventListener('input', () => rebuildSourceColumns());
+
+  function rebuildSourceColumns(){
+    const wb = state.source.wb;
+    if (!wb) return;
+    const rows = sheetToRows(wb, state.source.sheetName);
+    const headerRowIdx = Math.max(0, (parseInt(el('sourceHeaderRowInput').value, 10) || 1) - 1);
+    state.source.headerRowIdx = headerRowIdx;
+    const cols = extractColumns(rows[headerRowIdx]);
+    state.source.columns = cols;
+    state.source.dataRows = rows.slice(headerRowIdx + 1).filter(r => r.some(c => norm(c) !== ''));
+
+    const box = el('sourceColumnsBox');
+    if (!cols.length) {
+      box.classList.add('hidden');
+      showBoxError('sourceError', '헤더 행에서 컬럼을 찾지 못했습니다.', ['헤더 행 번호를 확인해주세요.']);
+      rulesCard.classList.add('disabled');
+      mappingCard.classList.add('disabled');
+      configCard.classList.add('disabled');
+      runCard.classList.add('disabled');
+      return;
+    }
+    el('sourceError').classList.add('hidden');
+    box.classList.remove('hidden');
+    el('sourceColCount').textContent = cols.length;
+    el('sourceRowCount').textContent = state.source.dataRows.length;
+    el('sourceChips').innerHTML = cols.map(c => `<span class="chip">${escapeHtml(c.name)}</span>`).join('');
+
+    rulesCard.classList.remove('disabled');
+    mappingCard.classList.remove('disabled');
+    configCard.classList.remove('disabled');
+    runCard.classList.remove('disabled');
+
+    // 컬럼이 바뀌면 기존 조건/매핑 중 더 이상 존재하지 않는 값은 정리
+    const validNames = new Set(cols.map(c => c.name));
+    state.rules.forEach(r => { if (!validNames.has(r.column)) r.column = cols[0].name; });
+    renderRules();
+    renderMappingUI();
+    hideResult();
+  }
+
+  // ================= STEP 3: 필터 조건 =================
+  el('addRuleBtn').addEventListener('click', () => {
+    if (!state.source.columns.length) return;
+    state.rules.push({ id: ++state.ruleSeq, column: state.source.columns[0].name, valuesText: '', action: 'keep' });
+    renderRules();
+  });
+
+  function renderRules(){
+    const list = el('rulesList');
+    if (!state.rules.length) {
+      list.innerHTML = '<p class="note">설정된 조건이 없습니다. "+ 조건 추가"를 눌러 시작하세요.</p>';
+      return;
+    }
+    const colOptions = state.source.columns.map(c => `<option value="${escapeAttr(c.name)}">${escapeHtml(c.name)}</option>`).join('');
+    list.innerHTML = state.rules.map(r => `
+      <div class="rule-row" data-id="${r.id}">
+        <select class="rule-col">${colOptions}</select>
+        <input type="text" class="rule-val" placeholder="예: 완료  (쉼표로 여러 값 가능: Naver,네이버)" value="${escapeAttr(r.valuesText)}">
+        <select class="rule-action">
+          <option value="keep">이 값만 유지</option>
+          <option value="remove">이 값 제거</option>
+        </select>
+        <button class="btn btn-danger btn-sm rule-del" title="삭제">✕</button>
+      </div>
+    `).join('');
+
+    list.querySelectorAll('.rule-row').forEach(rowEl => {
+      const id = Number(rowEl.dataset.id);
+      const rule = state.rules.find(r => r.id === id);
+      const colSel = rowEl.querySelector('.rule-col');
+      colSel.value = rule.column;
+      colSel.addEventListener('change', () => { rule.column = colSel.value; });
+
+      const valInput = rowEl.querySelector('.rule-val');
+      valInput.addEventListener('input', () => { rule.valuesText = valInput.value; });
+
+      const actionSel = rowEl.querySelector('.rule-action');
+      actionSel.value = rule.action;
+      actionSel.addEventListener('change', () => { rule.action = actionSel.value; });
+
+      rowEl.querySelector('.rule-del').addEventListener('click', () => {
+        state.rules = state.rules.filter(r => r.id !== id);
+        renderRules();
+      });
+    });
+  }
+
+  // ================= STEP 4: 컬럼 매핑 =================
+  function renderMappingUI(){
+    const tbody = el('mapTableBody');
+    const tCols = state.template.columns;
+    const sCols = state.source.columns;
+    if (!tCols.length) { tbody.innerHTML = ''; return; }
+
+    tbody.innerHTML = tCols.map((tc, idx) => {
+      const options = ['<option value="">(매핑 안 함)</option>']
+        .concat(sCols.map(sc => `<option value="${escapeAttr(sc.name)}">${escapeHtml(sc.name)}</option>`))
+        .join('');
+      return `
+        <tr data-idx="${idx}">
+          <td>${escapeHtml(tc.name)}</td>
+          <td><select class="map-select">${options}</select></td>
+        </tr>
+      `;
+    }).join('');
+
+    tbody.querySelectorAll('tr').forEach(tr => {
+      const idx = Number(tr.dataset.idx);
+      const tc = tCols[idx];
+      const sel = tr.querySelector('.map-select');
+      let current = state.mapping[idx];
+      if (!state.mappingTouched.has(idx)) {
+        const auto = sCols.find(sc => norm(sc.name) === norm(tc.name));
+        current = auto ? auto.name : '';
+      }
+      if (!sCols.some(sc => sc.name === current)) current = '';
+      state.mapping[idx] = current;
+      sel.value = current;
+      sel.addEventListener('change', () => {
+        state.mappingTouched.add(idx);
+        state.mapping[idx] = sel.value;
+      });
+    });
+  }
+
+  // ================= STEP 5: 실행 =================
+  el('runBtn').addEventListener('click', runProcess);
+  el('downloadBtn').addEventListener('click', downloadResult);
+
+  let lastRun = null; // { outputRows, statsChain }
+
+  function runProcess(){
+    el('runError').classList.add('hidden');
+    hideResult();
+
+    if (!state.template.columns.length) {
+      showBoxError('runError', '출력 폼이 필요합니다.', ['1단계에서 출력 폼을 첨부해주세요.']);
+      return;
+    }
+    if (!state.source.columns.length || !state.source.dataRows.length) {
+      showBoxError('runError', '재구성 대상 데이터가 필요합니다.', ['2단계에서 데이터 파일을 첨부해주세요.']);
+      return;
+    }
+    const hasMapping = Object.values(state.mapping).some(v => v);
+    if (!hasMapping) {
+      showBoxError('runError', '매핑된 컬럼이 없습니다.', ['4단계에서 출력 컬럼에 원본 컬럼을 하나 이상 연결해주세요.']);
+      return;
+    }
+
+    const sColIndex = {};
+    state.source.columns.forEach(c => { sColIndex[c.name] = c.colIndex; });
+
+    // ---- 필터 적용 (단계별 통과 건수 기록) ----
+    let rows = state.source.dataRows.slice();
+    const statsChain = [{ label: '원본 데이터', count: rows.length }];
+
+    state.rules.forEach(rule => {
+      const values = (rule.valuesText || '').split(',').map(v => v.trim().toLowerCase()).filter(v => v !== '');
+      if (!values.length) return; // 값이 없는 조건은 건너뜀
+      const colIdx = sColIndex[rule.column];
+      rows = rows.filter(r => {
+        const v = cellStr(r[colIdx]).toLowerCase();
+        const matched = values.some(val => v.includes(val));
+        return rule.action === 'keep' ? matched : !matched;
+      });
+      const label = `${rule.column} ${rule.action === 'keep' ? '유지' : '제거'} (${rule.valuesText})`;
+      statsChain.push({ label, count: rows.length });
+    });
+
+    // ---- 컬럼 매핑 적용 ----
+    const tCols = state.template.columns;
+    const outputRows = rows.map(r => {
+      return tCols.map((tc, idx) => {
+        const srcName = state.mapping[idx];
+        if (!srcName) return '';
+        let v = r[sColIndex[srcName]];
+        if (v instanceof Date) {
+          const y = v.getFullYear(), mo = String(v.getMonth()+1).padStart(2,'0'), d = String(v.getDate()).padStart(2,'0');
+          v = `${y}-${mo}-${d}`;
+        }
+        return v === undefined || v === null ? '' : v;
+      });
+    });
+
+    lastRun = { outputRows, statsChain };
+    renderResult(outputRows, statsChain);
+  }
+
+  function renderResult(outputRows, statsChain){
+    const box = el('resultBox');
+    box.classList.remove('hidden');
+
+    const flow = el('statsFlow');
+    flow.innerHTML = statsChain.map((s, i) => {
+      const isLast = i === statsChain.length - 1;
+      return (i > 0 ? '<span class="stat-arrow">→</span>' : '') +
+        `<div class="stat-pill${isLast ? ' final' : ''}"><div class="n">${s.count.toLocaleString()}</div><div class="l">${escapeHtml(s.label)}</div></div>`;
+    }).join('');
+
+    const headers = state.template.columns.map(c => c.name);
+    const preview = outputRows.slice(0, 20);
+    const table = el('previewTable');
+    let html = '<thead><tr>' + headers.map(h => `<th>${escapeHtml(h)}</th>`).join('') + '</tr></thead><tbody>';
+    preview.forEach(row => {
+      html += '<tr>' + row.map(v => {
+        const s = typeof v === 'number' ? v.toLocaleString() : (v === '' || v === undefined ? '' : v);
+        return `<td>${escapeHtml(String(s))}</td>`;
+      }).join('') + '</tr>';
+    });
+    html += '</tbody>';
+    table.innerHTML = html;
+
+    el('previewNote').textContent = outputRows.length > preview.length
+      ? `미리보기: 상위 ${preview.length}행 / 전체 ${outputRows.length}행`
+      : `전체 ${outputRows.length}행 표시`;
+  }
+
+  function hideResult(){
+    el('resultBox').classList.add('hidden');
+    lastRun = null;
+  }
+
+  // ---- 다운로드: 원본 출력 폼을 다시 로드해 서식을 유지한 채 데이터만 채워넣는다 (ExcelJS는 cell.value만 바꾸면 기존 스타일이 그대로 유지됨) ----
+  async function downloadResult(){
+    if (!lastRun) { alert('먼저 "실행 (미리보기)"을 눌러주세요.'); return; }
+    const downloadBtn = el('downloadBtn');
+    downloadBtn.disabled = true;
+    const originalLabel = downloadBtn.textContent;
+    downloadBtn.textContent = '생성 중...';
+    try {
+      const wb = await readWorkbook(state.template.buffer); // 매 실행마다 원본에서 새로 읽어 깨끗한 상태로 시작
+      const ws = wb.getWorksheet(state.template.sheetName);
+      const headerRowNum = state.template.headerRowIdx + 1; // ExcelJS는 1-indexed
+      const tCols = state.template.columns; // colIndex는 0-based → 실제 컬럼번호는 +1
+
+      // 기존에 채워져 있던 값 제거 (서식은 유지)
+      const lastRowNum = ws.rowCount || headerRowNum;
+      for (let r = headerRowNum + 1; r <= lastRowNum; r++) {
+        tCols.forEach(tc => { ws.getCell(r, tc.colIndex + 1).value = null; });
+      }
+
+      // 새 데이터 기입
+      lastRun.outputRows.forEach((row, i) => {
+        const r = headerRowNum + 1 + i;
+        tCols.forEach((tc, idx) => {
+          const cell = ws.getCell(r, tc.colIndex + 1);
+          const v = row[idx];
+          cell.value = (v === '' || v === undefined) ? null : v;
+          if (typeof v === 'number' && !cell.numFmt) cell.numFmt = '#,##0';
+        });
+      });
+
+      const buf = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const stamp = (() => {
+        const d = new Date();
+        return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+      })();
+      const a = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      a.href = url;
+      a.download = `재정렬결과_${stamp}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (err) {
+      alert('다운로드 파일 생성 중 오류가 발생했습니다: ' + (err.message || err));
+    } finally {
+      downloadBtn.disabled = false;
+      downloadBtn.textContent = originalLabel;
+    }
+  }
+
+  // ================= 리셋 =================
+  el('globalResetBtn').addEventListener('click', () => resetFrom('template'));
+
+  function resetFrom(from){
+    if (from === 'template') {
+      state.template = { buffer: null, wb: null, sheetName: null, headerRowIdx: 0, columns: [] };
+      templateFileInput.value = '';
+      el('templateMetaRow').classList.add('hidden');
+      el('templateColumnsBox').classList.add('hidden');
+      el('templateError').classList.add('hidden');
+      state.mapping = {};
+      state.mappingTouched = new Set();
+    }
+    state.source = { buffer: null, wb: null, sheetName: null, headerRowIdx: 0, columns: [], dataRows: [] };
+    sourceFileInput.value = '';
+    el('sourceMetaRow').classList.add('hidden');
+    el('sourceColumnsBox').classList.add('hidden');
+    el('sourceError').classList.add('hidden');
+    state.rules = [];
+    renderRules();
+    el('mapTableBody').innerHTML = '';
+    hideResult();
+    el('runError').classList.add('hidden');
+
+    sourceCard.classList.add('disabled');
+    rulesCard.classList.add('disabled');
+    mappingCard.classList.add('disabled');
+    configCard.classList.add('disabled');
+    runCard.classList.add('disabled');
+    el('presetNote').textContent = '';
+    el('presetNameInput').value = '';
+  }
+
+  // ================= 설정 저장/불러오기 =================
+  const PRESET_KEY = 'excelRealignTool.presets.v1';
+
+  function loadPresets(){
+    try { return JSON.parse(localStorage.getItem(PRESET_KEY) || '{}'); }
+    catch (e) { return {}; }
+  }
+  function savePresets(obj){
+    try { localStorage.setItem(PRESET_KEY, JSON.stringify(obj)); }
+    catch (e) { /* 저장 공간 부족 등은 무시 */ }
+  }
+  function refreshPresetSelect(){
+    const presets = loadPresets();
+    const names = Object.keys(presets).sort((a, b) => a.localeCompare(b, 'ko'));
+    const sel = el('presetSelect');
+    const current = sel.value;
+    sel.innerHTML = '<option value="">저장된 설정 선택...</option>' +
+      names.map(n => `<option value="${escapeAttr(n)}">${escapeHtml(n)}</option>`).join('');
+    if (names.includes(current)) sel.value = current;
+  }
+
+  // 현재 조건/매핑을 이식 가능한 형태로 직렬화 (매핑은 템플릿 컬럼 "이름" 기준으로 저장 → 다른 파일에도 재적용 가능)
+  function serializeConfig(){
+    const mappingByName = {};
+    state.template.columns.forEach((tc, idx) => {
+      const v = state.mapping[idx];
+      if (v) mappingByName[tc.name] = v;
+    });
+    return {
+      version: 1,
+      savedAt: new Date().toISOString(),
+      rules: state.rules.map(r => ({ column: r.column, valuesText: r.valuesText, action: r.action })),
+      mapping: mappingByName
+    };
+  }
+
+  // 저장된 설정을 현재 첨부된 파일의 컬럼과 대조해 적용 (존재하지 않는 컬럼은 건너뜀)
+  function applyConfig(cfg){
+    if (!cfg || typeof cfg !== 'object') return { rulesApplied: 0, mapApplied: 0 };
+    const validSourceNames = new Set(state.source.columns.map(c => c.name));
+
+    const rules = Array.isArray(cfg.rules) ? cfg.rules : [];
+    state.rules = rules
+      .filter(r => r && validSourceNames.has(r.column))
+      .map(r => ({ id: ++state.ruleSeq, column: r.column, valuesText: r.valuesText || '', action: r.action === 'remove' ? 'remove' : 'keep' }));
+    renderRules();
+
+    let mapApplied = 0;
+    const mapping = cfg.mapping && typeof cfg.mapping === 'object' ? cfg.mapping : {};
+    state.template.columns.forEach((tc, idx) => {
+      const srcName = mapping[tc.name];
+      if (srcName && validSourceNames.has(srcName)) {
+        state.mapping[idx] = srcName;
+        state.mappingTouched.add(idx);
+        mapApplied++;
+      }
+    });
+    renderMappingUI();
+
+    return { rulesApplied: state.rules.length, mapApplied };
+  }
+
+  function showNote(id, text){ el(id).textContent = text; }
+
+  el('savePresetBtn').addEventListener('click', () => {
+    const name = el('presetNameInput').value.trim();
+    if (!name) { alert('설정 이름을 입력해주세요.'); return; }
+    const presets = loadPresets();
+    presets[name] = serializeConfig();
+    savePresets(presets);
+    refreshPresetSelect();
+    el('presetSelect').value = name;
+    const mapCount = Object.values(state.mapping).filter(Boolean).length;
+    showNote('presetNote', `"${name}" 설정을 저장했습니다. (조건 ${state.rules.length}개, 매핑 ${mapCount}개)`);
+  });
+
+  el('loadPresetBtn').addEventListener('click', () => {
+    const name = el('presetSelect').value;
+    if (!name) { alert('불러올 설정을 선택해주세요.'); return; }
+    const presets = loadPresets();
+    const cfg = presets[name];
+    if (!cfg) { alert('설정을 찾을 수 없습니다.'); return; }
+    const result = applyConfig(cfg);
+    hideResult();
+    showNote('presetNote', `"${name}" 설정을 적용했습니다. (조건 ${result.rulesApplied}개, 매핑 ${result.mapApplied}개)`);
+  });
+
+  el('deletePresetBtn').addEventListener('click', () => {
+    const name = el('presetSelect').value;
+    if (!name) { alert('삭제할 설정을 선택해주세요.'); return; }
+    if (!confirm(`"${name}" 설정을 삭제할까요?`)) return;
+    const presets = loadPresets();
+    delete presets[name];
+    savePresets(presets);
+    refreshPresetSelect();
+    showNote('presetNote', `"${name}" 설정을 삭제했습니다.`);
+  });
+
+  el('exportConfigBtn').addEventListener('click', () => {
+    const cfg = serializeConfig();
+    const name = el('presetNameInput').value.trim() || el('presetSelect').value || '엑셀재정렬_설정';
+    const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    a.href = url; a.download = `${name}.json`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  });
+
+  el('importConfigBtn').addEventListener('click', () => el('importConfigInput').click());
+  el('importConfigInput').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = evt => {
+      try {
+        const cfg = JSON.parse(evt.target.result);
+        const result = applyConfig(cfg);
+        hideResult();
+        showNote('presetNote', `설정 파일을 불러와 적용했습니다. (조건 ${result.rulesApplied}개, 매핑 ${result.mapApplied}개)`);
+      } catch (err) {
+        alert('설정 파일을 읽을 수 없습니다: ' + (err.message || err));
+      }
+    };
+    reader.readAsText(file);
+    el('importConfigInput').value = '';
+  });
+
+  refreshPresetSelect();
+
+  // ================= 헬퍼 =================
+  function showBoxError(id, title, lines){
+    const box = el(id);
+    box.classList.remove('hidden');
+    box.innerHTML = `<b>${escapeHtml(title)}</b>` + lines.map(l => `<div>${escapeHtml(l)}</div>`).join('');
+  }
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function escapeAttr(s){ return escapeHtml(s); }
+
+  renderRules();
+})();
+</script>
+</body>
+</html>
